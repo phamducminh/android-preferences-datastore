@@ -17,7 +17,6 @@
 package com.codelab.android.datastore.data
 
 import android.content.Context
-import androidx.core.content.edit
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.IOException
 import androidx.datastore.preferences.core.Preferences
@@ -40,7 +39,10 @@ enum class SortOrder {
     BY_DEADLINE_AND_PRIORITY
 }
 
-data class UserPreferences(val showCompleted: Boolean)
+data class UserPreferences(
+    val showCompleted: Boolean,
+    val sortOrder: SortOrder
+)
 
 /**
  * Class that handles saving and retrieving user preferences
@@ -64,9 +66,13 @@ class UserPreferencesRepository(
             }
         }
         .map { preferences ->
+            // Get the sort order from preferences and convert it to a [SortOrder] object
+            val sortOrder = SortOrder.valueOf(
+                preferences[PreferenceKeys.SORT_ORDER] ?: SortOrder.NONE.name
+            )
             // Get our show completed value, defaulting to false if not set:
             val showCompleted = preferences[PreferenceKeys.SHOW_COMPLETED] ?: false
-            UserPreferences(showCompleted)
+            UserPreferences(showCompleted, sortOrder)
         }
 
     private val sharedPreferences =
@@ -85,44 +91,57 @@ class UserPreferencesRepository(
             return SortOrder.valueOf(order ?: SortOrder.NONE.name)
         }
 
-    fun enableSortByDeadline(enable: Boolean) {
-        val currentOrder = sortOrderFlow.value
-        val newSortOrder =
-            if (enable) {
-                if (currentOrder == SortOrder.BY_PRIORITY) {
-                    SortOrder.BY_DEADLINE_AND_PRIORITY
+    suspend fun enableSortByDeadline(enable: Boolean) {
+        // edit handles data transactionally, ensuring that if the sort is updated at the same
+        // time from another thread, we won't have conflicts
+        dataStore.edit { preferences ->
+            // Get the current SortOrder as an enum
+            val currentOrder = SortOrder.valueOf(
+                preferences[PreferenceKeys.SORT_ORDER] ?: SortOrder.NONE.name
+            )
+
+            val newSortOrder =
+                if (enable) {
+                    if (currentOrder == SortOrder.BY_PRIORITY) {
+                        SortOrder.BY_DEADLINE_AND_PRIORITY
+                    } else {
+                        SortOrder.BY_DEADLINE
+                    }
                 } else {
-                    SortOrder.BY_DEADLINE
+                    if (currentOrder == SortOrder.BY_DEADLINE_AND_PRIORITY) {
+                        SortOrder.BY_PRIORITY
+                    } else {
+                        SortOrder.NONE
+                    }
                 }
-            } else {
-                if (currentOrder == SortOrder.BY_DEADLINE_AND_PRIORITY) {
-                    SortOrder.BY_PRIORITY
-                } else {
-                    SortOrder.NONE
-                }
-            }
-        updateSortOrder(newSortOrder)
-        _sortOrderFlow.value = newSortOrder
+            preferences[PreferenceKeys.SORT_ORDER] = newSortOrder.name
+        }
     }
 
-    fun enableSortByPriority(enable: Boolean) {
-        val currentOrder = sortOrderFlow.value
-        val newSortOrder =
-            if (enable) {
-                if (currentOrder == SortOrder.BY_DEADLINE) {
-                    SortOrder.BY_DEADLINE_AND_PRIORITY
+    suspend fun enableSortByPriority(enable: Boolean) {
+        // edit handles data transactionally, ensuring that if the sort is updated at the same
+        // time from another thread, we won't have conflicts
+        dataStore.edit { preferences ->
+            val currentOrder = SortOrder.valueOf(
+                preferences[PreferenceKeys.SORT_ORDER] ?: SortOrder.NONE.name
+            )
+
+            val newSortOrder =
+                if (enable) {
+                    if (currentOrder == SortOrder.BY_DEADLINE) {
+                        SortOrder.BY_DEADLINE_AND_PRIORITY
+                    } else {
+                        SortOrder.BY_PRIORITY
+                    }
                 } else {
-                    SortOrder.BY_PRIORITY
+                    if (currentOrder == SortOrder.BY_DEADLINE_AND_PRIORITY) {
+                        SortOrder.BY_DEADLINE
+                    } else {
+                        SortOrder.NONE
+                    }
                 }
-            } else {
-                if (currentOrder == SortOrder.BY_DEADLINE_AND_PRIORITY) {
-                    SortOrder.BY_DEADLINE
-                } else {
-                    SortOrder.NONE
-                }
-            }
-        updateSortOrder(newSortOrder)
-        _sortOrderFlow.value = newSortOrder
+            preferences[PreferenceKeys.SORT_ORDER] = newSortOrder.name
+        }
     }
 
     suspend fun updateShowCompleted(showCompleted: Boolean) {
@@ -131,9 +150,4 @@ class UserPreferencesRepository(
         }
     }
 
-    private fun updateSortOrder(sortOrder: SortOrder) {
-        sharedPreferences.edit {
-            putString(SORT_ORDER_KEY, sortOrder.name)
-        }
-    }
 }
