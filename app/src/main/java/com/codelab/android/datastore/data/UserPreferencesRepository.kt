@@ -16,21 +16,16 @@
 
 package com.codelab.android.datastore.data
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.IOException
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
-
-private const val USER_PREFERENCES_NAME = "user_preferences"
-private const val SORT_ORDER_KEY = "sort_order"
 
 enum class SortOrder {
     NONE,
@@ -47,12 +42,10 @@ data class UserPreferences(
 /**
  * Class that handles saving and retrieving user preferences
  */
-class UserPreferencesRepository(
-    private val dataStore: DataStore<Preferences>,
-    context: Context
-) {
+class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
 
     private object PreferenceKeys {
+        val SORT_ORDER = stringPreferencesKey("sort_order")
         val SHOW_COMPLETED = booleanPreferencesKey("show_completed")
     }
 
@@ -73,22 +66,6 @@ class UserPreferencesRepository(
             // Get our show completed value, defaulting to false if not set:
             val showCompleted = preferences[PreferenceKeys.SHOW_COMPLETED] ?: false
             UserPreferences(showCompleted, sortOrder)
-        }
-
-    private val sharedPreferences =
-        context.applicationContext.getSharedPreferences(USER_PREFERENCES_NAME, Context.MODE_PRIVATE)
-
-    // Keep the sort order as a stream of changes
-    private val _sortOrderFlow = MutableStateFlow(sortOrder)
-    val sortOrderFlow: StateFlow<SortOrder> = _sortOrderFlow
-
-    /**
-     * Get the sort order. By default, sort order is None.
-     */
-    private val sortOrder: SortOrder
-        get() {
-            val order = sharedPreferences.getString(SORT_ORDER_KEY, SortOrder.NONE.name)
-            return SortOrder.valueOf(order ?: SortOrder.NONE.name)
         }
 
     suspend fun enableSortByDeadline(enable: Boolean) {

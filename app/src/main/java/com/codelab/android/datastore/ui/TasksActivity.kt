@@ -45,7 +45,7 @@ class TasksActivity : AppCompatActivity() {
             this,
             TasksViewModelFactory(
                 TasksRepository,
-                UserPreferencesRepository(dataStore, this)
+                UserPreferencesRepository(dataStore)
             )
         )[TasksViewModel::class.java]
 
