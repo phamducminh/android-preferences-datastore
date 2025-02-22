@@ -18,8 +18,17 @@ package com.codelab.android.datastore.data
 
 import android.content.Context
 import androidx.core.content.edit
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.IOException
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 
 private const val USER_PREFERENCES_NAME = "user_preferences"
 private const val SORT_ORDER_KEY = "sort_order"
@@ -31,10 +40,34 @@ enum class SortOrder {
     BY_DEADLINE_AND_PRIORITY
 }
 
+data class UserPreferences(val showCompleted: Boolean)
+
 /**
  * Class that handles saving and retrieving user preferences
  */
-class UserPreferencesRepository private constructor(context: Context) {
+class UserPreferencesRepository(
+    private val dataStore: DataStore<Preferences>,
+    context: Context
+) {
+
+    private object PreferenceKeys {
+        val SHOW_COMPLETED = booleanPreferencesKey("show_completed")
+    }
+
+    val userPreferencesFlow: Flow<UserPreferences> = dataStore.data
+        .catch { exception ->
+            // dataStore.data throws an IOException when an error is encountered when reading data
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            // Get our show completed value, defaulting to false if not set:
+            val showCompleted = preferences[PreferenceKeys.SHOW_COMPLETED] ?: false
+            UserPreferences(showCompleted)
+        }
 
     private val sharedPreferences =
         context.applicationContext.getSharedPreferences(USER_PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -92,26 +125,15 @@ class UserPreferencesRepository private constructor(context: Context) {
         _sortOrderFlow.value = newSortOrder
     }
 
-    private fun updateSortOrder(sortOrder: SortOrder) {
-        sharedPreferences.edit {
-            putString(SORT_ORDER_KEY, sortOrder.name)
+    suspend fun updateShowCompleted(showCompleted: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.SHOW_COMPLETED] = showCompleted
         }
     }
 
-    companion object {
-        @Volatile
-        private var INSTANCE: UserPreferencesRepository? = null
-
-        fun getInstance(context: Context): UserPreferencesRepository {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE?.let {
-                    return it
-                }
-
-                val instance = UserPreferencesRepository(context)
-                INSTANCE = instance
-                instance
-            }
+    private fun updateSortOrder(sortOrder: SortOrder) {
+        sharedPreferences.edit {
+            putString(SORT_ORDER_KEY, sortOrder.name)
         }
     }
 }

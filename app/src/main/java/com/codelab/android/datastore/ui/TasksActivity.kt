@@ -16,8 +16,10 @@
 
 package com.codelab.android.datastore.ui
 
+import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.DividerItemDecoration
 import com.codelab.android.datastore.data.SortOrder
@@ -40,7 +42,10 @@ class TasksActivity : AppCompatActivity() {
 
         viewModel = ViewModelProvider(
             this,
-            TasksViewModelFactory(TasksRepository, UserPreferencesRepository.getInstance(this))
+            TasksViewModelFactory(
+                TasksRepository,
+                UserPreferencesRepository(dataStore, this)
+            )
         )[TasksViewModel::class.java]
 
         setupRecyclerView()
@@ -84,3 +89,9 @@ class TasksActivity : AppCompatActivity() {
             sortOrder == SortOrder.BY_PRIORITY || sortOrder == SortOrder.BY_DEADLINE_AND_PRIORITY
     }
 }
+
+private const val USER_PREFERENCES_NAME = "user_preferences"
+
+private val Context.dataStore by preferencesDataStore(
+    name = USER_PREFERENCES_NAME
+)
